@@ -1,27 +1,31 @@
 #!/usr/bin/env bash
-# Install NGINX server, set mensaje and redirection the server
-apt-get -y update
-apt-get -y install nginx
-ufw allow 'Nginx HTTP'
-echo "Hello World!" > /var/www/html/index.nginx-debian.html
-sudo mkdir /var/www/error
-echo "Ceci n'est pas une page" > /var/www/error/404.html
-echo "server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
-    add_header X-Served-By $HOSTNAME;
-    root   /var/www/html;
-    index  index.html index.htm index.nginx-debian.html;
-    
-    server_name _;
-    
-    location /redirect_me {
-        return 301 http://graceeffiong.tech/;
-    }
-    error_page 404 /404.html;
-    location /404 {
-      root /var/www/error;
-      internal;
-    }
-}" > /etc/nginx/sites-available/default
+# Configure Nginx so that its HTTP response contains a custom header(on web-01 and web-02)
+# The name of the custom header must be X-Served-By
+# The value of the custom HTTP header must be the hostname of the server Nginx is running on
+
+sudo apt-get -y update
+sudo apt-get -y install nginx
+
+# Setting up firewall to grant request via port 80
+sudo ufw allow 'Nginx HTTP'
+sudo mkdir -p /var/www/html
+
+# Changing permissions for easy creation of files in /var/www
+sudo chown -R "$USER":"$USER" /var/www
+sudo chmod -R 755 /var/www
+
+# Creating index page
+echo 'Hello World!' | sudo tee  /var/www/html/index.nginx-debian.html
+
+# Create error 404 webpage
+echo "Ceci n'est pas une page" | sudo tee /var/www/html/404.html
+
+# Configure redirect page(using /redirect_me) and add header to show hostname
+replacement_string="server_name _;\n\tadd_header X-Served-By \$hostname;\n\trewrite ^\/redirect_me https:\/\/www.linkedin.com\/feed\/ permanent;"
+sudo sed -i "s/server_name _;/$replacement_string/" /etc/nginx/sites-enabled/default
+
+# Configure redirect for error 404 page
+replacement_string="listen 80 default_server;\n\terror_page 404 \/404.html;\n\tlocation = \/404.html {\n\t\troot \/var\/www\/html;\n\t\tinternal;\n\t}"
+sudo sed -i "s/listen 80 default_server;/$replacement_string/" /etc/nginx/sites-enabled/default
+
 service nginx restart
